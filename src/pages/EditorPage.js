@@ -1,60 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import magnetIcon from '../assets/magnet-icon.png';
-
-// delete
-function castFOV(ctx, item, walls) {
-  const { x, y, radius } = item;
-  const steps = 180;
-  const angleStep = (2 * Math.PI) / steps;
-  const points = [];
-
-  for (let i = 0; i < steps; i++) {
-    const angle = i * angleStep;
-    const dx = Math.cos(angle);
-    const dy = Math.sin(angle);
-    let closestDist = radius;
-    let endX = x + dx * radius;
-    let endY = y + dy * radius;
-
-    for (const [[x1, y1], [x2, y2]] of walls) {
-      const denom = (x2 - x1) * dy - (y2 - y1) * dx;
-      if (denom === 0) continue;
-
-      const t = ((x1 - x) * dy - (y1 - y) * dx) / denom;
-      const u = ((x1 - x) * (y2 - y1) - (y1 - y) * (x2 - x1)) / denom;
-
-      if (t >= 0 && t <= 1 && u >= 0) {
-        const ix = x1 + t * (x2 - x1);
-        const iy = y1 + t * (y2 - y1);
-        const dist = Math.hypot(ix - x, iy - y);
-        if (dist < closestDist) {
-          closestDist = dist;
-          endX = ix;
-          endY = iy;
-        }
-      }
-    }
-
-    points.push([endX, endY]);
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(points[0][0], points[0][1]);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i][0], points[i][1]);
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
-  ctx.fill();
-}
-// delete above
+import { useNavigate } from 'react-router-dom'
 
 function EditorPage() {
   const [layout, setLayout] = useState(null);
   const [toolMode, setToolMode] = useState('camera1');
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [fovInverted, setFovInverted] = useState(false);
   const canvasRef = useRef(null);
+  const navigate = useNavigate();
+
+
+  const handleExport = () => {
+    navigate('/export');
+  };
 
   const fovRadii = {
     camera1: 10,
@@ -108,7 +68,7 @@ function EditorPage() {
     setSelectedItem(null);
   };
 
-  const isLineIntersectingWall = (x1, y1, x2, y2, walls) => {
+  const isLineBlocked = (x1, y1, x2, y2, walls) => {
     for (const [[wx1, wy1], [wx2, wy2]] of walls) {
       const det = (x2 - x1) * (wy2 - wy1) - (y2 - y1) * (wx2 - wx1);
       if (det === 0) continue;
@@ -185,13 +145,14 @@ function EditorPage() {
             const endX = item.x + dx;
             const endY = item.y + dy;
 
-            if (isLineIntersectingWall(item.x, item.y, endX, endY, layout.walls)) {
-              ctx.setLineDash([]);
-              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
-            } else {
-              ctx.setLineDash([4, 4]);
-              ctx.strokeStyle = 'rgba(0, 0, 255, 0.1)';
-            }
+            const blocked = isLineBlocked(item.x, item.y, endX, endY, layout.walls);
+
+            const isSolid = fovInverted ? !blocked : blocked;
+
+            ctx.setLineDash(isSolid ? [] : [4, 4]);
+            ctx.strokeStyle = isSolid
+              ? 'rgba(0, 0, 255, 0.3)'
+              : 'rgba(0, 0, 255, 0.1)';
 
             ctx.beginPath();
             ctx.moveTo(0, 0);
@@ -201,54 +162,6 @@ function EditorPage() {
 
           ctx.setLineDash([]);
           ctx.beginPath();
-          // dlete below
-          function castFOV(ctx, item, walls) {
-            const { x, y, radius } = item;
-            const steps = 180; // Higher = smoother circle
-            const angleStep = (2 * Math.PI) / steps;
-            const points = [];
-
-            for (let i = 0; i < steps; i++) {
-                const angle = i * angleStep;
-                let dx = Math.cos(angle);
-                let dy = Math.sin(angle);
-                let closestDist = radius;
-                let endX = x + dx * radius;
-                let endY = y + dy * radius;
-
-                for (const [[x1, y1], [x2, y2]] of walls) {
-                    const denom = (x2 - x1) * dy - (y2 - y1) * dx;
-                    if (denom === 0) continue; // parallel
-
-                    const t = ((x1 - x) * dy - (y1 - y) * dx) / denom;
-                    const u = ((x1 - x) * (y2 - y1) - (y1 - y) * (x2 - x1)) / denom;
-
-                    if (t >= 0 && t <= 1 && u >= 0) {
-                        const ix = x1 + t * (x2 - x1);
-                        const iy = y1 + t * (y2 - y1);
-                        const dist = Math.hypot(ix - x, iy - y);
-                        
-                        if (dist < closestDist) {
-                        closestDist = dist;
-                        endX = ix;
-                        endY = iy;
-                        }
-                    }
-                }
-
-                points.push([endX, endY]);
-            }
-
-            ctx.beginPath();
-            ctx.moveTo(points[0][0], points[0][1]);
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i][0], points[i][1]);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
-            ctx.fill();
-            }
-          // delete above
           ctx.arc(0, 0, 5, 0, 2 * Math.PI);
           ctx.fillStyle = 'blue';
           ctx.fill();
@@ -276,7 +189,7 @@ function EditorPage() {
     if (!canvas || !layout) return;
     const ctx = canvas.getContext('2d');
     drawLayout(ctx);
-  }, [layout, items, selectedItem]);
+  }, [layout, items, selectedItem, fovInverted]);
 
   if (!layout) return <p>Loading floorplan...</p>;
 
@@ -290,7 +203,7 @@ function EditorPage() {
         <button onClick={() => setToolMode('sensor')}>Snap Sensor</button>
         <button onClick={() => setToolMode(null)}>Selection</button>
         <button onClick={handleUndo}>Undo</button>
-        <button>Export</button>
+        <button onClick={handleExport}>Export</button>
       </div>
 
       <canvas
@@ -301,12 +214,30 @@ function EditorPage() {
         style={{ border: '1px solid #ccc', cursor: toolMode ? 'crosshair' : 'pointer' }}
       />
 
+      {selectedItem?.type?.startsWith('camera') && toolMode === null && (
+        <button
+          style={{
+            position: 'absolute',
+            top: selectedItem.y - 40,
+            left: selectedItem.x + 20,
+            zIndex: 10,
+            background: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '6px',
+            padding: '4px',
+          }}
+          onClick={() => setFovInverted(!fovInverted)}
+        >
+          Swap FOV Color
+        </button>
+      )}
+
       {selectedItem && (
         <div
           style={{
             position: 'absolute',
             top: selectedItem.y - 20,
-            left: selectedItem.x + 20,
+            left: selectedItem.x + 80,
             background: '#fff',
             border: '1px solid #ccc',
             padding: '4px',
@@ -319,6 +250,16 @@ function EditorPage() {
           <button onClick={handleDelete}>❌</button>
         </div>
       )}
+
+      <div style={{ marginTop: '10px', fontSize: '14px' }}>
+        <strong>Legend:</strong>
+        <div>
+          <span style={{ color: 'rgba(0, 0, 255, 0.3)', fontWeight: 'bold' }}>━</span> Seen by Camera
+        </div>
+        <div>
+          <span style={{ borderBottom: '2px dashed rgba(0, 0, 255, 0.1)' }}> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span> Obstructed
+        </div>
+      </div>
     </div>
   );
 }
