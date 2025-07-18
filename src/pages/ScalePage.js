@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function ScalePage() {
+  const navigate = useNavigate();
   const [template, setTemplate] = useState(null);
   const [points, setPoints] = useState([]);
   const [lines, setLines] = useState([]);
@@ -18,7 +20,7 @@ function ScalePage() {
     const stored = localStorage.getItem('selectedTemplate');
     if (stored) setTemplate(JSON.parse(stored));
   }, []);
-
+  
   const getClosestPointOnLine = (x, y) => {
     let minDist = Infinity;
     let snapPoint = null;
@@ -190,6 +192,20 @@ function ScalePage() {
     }
   };
 
+    // delete this line below after the check thingy
+  const handleContinueToEditor = () => {
+    const layoutData = {
+        template,
+        walls: lines,
+        doors,
+        windows
+    };
+
+    localStorage.setItem('smartHomeLayout', JSON.stringify(layoutData));
+    navigate('/editor');
+  };
+    // yup this line above this comment, and between my comments
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -228,12 +244,14 @@ function ScalePage() {
     return (
         <div style={{ padding: '20px' }}>
             <h2>Scale Floorplan: {template?.name}</h2>
+            
             <div style={{ marginBottom: '10px' }}>
                 <button onClick={() => setToolMode('walls')}>Walls</button>
                 <button onClick={() => setToolMode('doors')}>Doors</button>
                 <button onClick={() => setToolMode('windows')}>Windows</button>
                 <button onClick={() => setToolMode(null)}>Selection</button>
                 <button onClick={handleUndo}>Undo</button>
+                <button onClick={handleContinueToEditor}>Continue to Editor</button>
         </div>
 
       <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block' }}>
