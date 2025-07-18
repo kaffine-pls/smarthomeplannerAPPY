@@ -192,7 +192,6 @@ function ScalePage() {
     }
   };
 
-    // delete this line below after the check thingy
   const handleContinueToEditor = () => {
     const layoutData = {
         template,
@@ -204,7 +203,6 @@ function ScalePage() {
     localStorage.setItem('smartHomeLayout', JSON.stringify(layoutData));
     navigate('/editor');
   };
-    // yup this line above this comment, and between my comments
 
   useEffect(() => {
     const canvas = canvasRef.current;
