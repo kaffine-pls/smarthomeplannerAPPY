@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import magnetIcon from '../assets/magnet-icon.png';
-import { useNavigate } from 'react-router-dom'
+import swapIcon from '../assets/swap-icon.png'; // Ensure this path matches your project
 
 function EditorPage() {
   const [layout, setLayout] = useState(null);
   const [toolMode, setToolMode] = useState('camera1');
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [fovInverted, setFovInverted] = useState(false);
   const canvasRef = useRef(null);
   const navigate = useNavigate();
-
-
-  const handleExport = () => {
-    navigate('/export');
-  };
 
   const fovRadii = {
     camera1: 10,
@@ -24,10 +19,10 @@ function EditorPage() {
 
   useEffect(() => {
     const saved = localStorage.getItem('smartHomeLayout');
-    if (saved) {
-      setLayout(JSON.parse(saved));
-    }
+    if (saved) setLayout(JSON.parse(saved));
   }, []);
+
+  localStorage.setItem('editorItems', JSON.stringify(items));
 
   const handleClick = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -35,9 +30,7 @@ function EditorPage() {
     const y = e.clientY - rect.top;
 
     if (toolMode === null) {
-      const found = items.findLast(
-        (item) => Math.abs(item.x - x) < 15 && Math.abs(item.y - y) < 15
-      );
+      const found = items.findLast(item => Math.abs(item.x - x) < 15 && Math.abs(item.y - y) < 15);
       setSelectedItem(found || null);
       return;
     }
@@ -46,8 +39,10 @@ function EditorPage() {
       x,
       y,
       type: toolMode,
-      radius: fovRadii[toolMode] || 0
+      radius: fovRadii[toolMode] || 0,
+      fovInverted: false
     };
+
     setItems([...items, newItem]);
     setSelectedItem(null);
   };
@@ -63,22 +58,26 @@ function EditorPage() {
 
   const handleDelete = () => {
     if (!selectedItem) return;
-    const updated = items.filter((item) => item !== selectedItem);
+    const updated = items.filter(item => item !== selectedItem);
     setItems(updated);
     setSelectedItem(null);
+  };
+
+  const handleSwapFOV = () => {
+    if (!selectedItem || !selectedItem.type.startsWith('camera')) return;
+    const updated = items.map(item =>
+      item === selectedItem ? { ...item, fovInverted: !item.fovInverted } : item
+    );
+    setItems(updated);
   };
 
   const isLineBlocked = (x1, y1, x2, y2, walls) => {
     for (const [[wx1, wy1], [wx2, wy2]] of walls) {
       const det = (x2 - x1) * (wy2 - wy1) - (y2 - y1) * (wx2 - wx1);
       if (det === 0) continue;
-
       const lambda = ((wy2 - wy1) * (wx2 - x1) + (wx1 - wx2) * (wy2 - y1)) / det;
       const gamma = ((y1 - y2) * (wx2 - x1) + (x2 - x1) * (wy2 - y1)) / det;
-
-      if (0 < lambda && lambda < 1 && 0 < gamma && gamma < 1) {
-        return true;
-      }
+      if (0 < lambda && lambda < 1 && 0 < gamma && gamma < 1) return true;
     }
     return false;
   };
@@ -92,6 +91,7 @@ function EditorPage() {
     img.onload = () => {
       ctx.drawImage(img, 0, 0, 800, 600);
 
+      // Draw walls
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 2;
       layout.walls.forEach(([[x1, y1], [x2, y2]]) => {
@@ -101,6 +101,7 @@ function EditorPage() {
         ctx.stroke();
       });
 
+      // Draw doors
       layout.doors.forEach(({ x, y, rotation }) => {
         ctx.save();
         ctx.translate(x, y);
@@ -115,6 +116,7 @@ function EditorPage() {
         ctx.restore();
       });
 
+      // Draw windows
       layout.windows.forEach(({ x, y, rotation }) => {
         ctx.save();
         ctx.translate(x, y);
@@ -146,8 +148,7 @@ function EditorPage() {
             const endY = item.y + dy;
 
             const blocked = isLineBlocked(item.x, item.y, endX, endY, layout.walls);
-
-            const isSolid = fovInverted ? !blocked : blocked;
+            const isSolid = item.fovInverted ? !blocked : blocked;
 
             ctx.setLineDash(isSolid ? [] : [4, 4]);
             ctx.strokeStyle = isSolid
@@ -174,6 +175,7 @@ function EditorPage() {
         ctx.restore();
       });
 
+      // Highlight selection
       if (selectedItem) {
         ctx.beginPath();
         ctx.arc(selectedItem.x, selectedItem.y, 16, 0, 2 * Math.PI);
@@ -189,9 +191,7 @@ function EditorPage() {
     if (!canvas || !layout) return;
     const ctx = canvas.getContext('2d');
     drawLayout(ctx);
-  }, [layout, items, selectedItem, fovInverted]);
-
-  if (!layout) return <p>Loading floorplan...</p>;
+  }, [layout, items, selectedItem]);
 
   return (
     <div style={{ padding: '20px', position: 'relative' }}>
@@ -203,7 +203,7 @@ function EditorPage() {
         <button onClick={() => setToolMode('sensor')}>Snap Sensor</button>
         <button onClick={() => setToolMode(null)}>Selection</button>
         <button onClick={handleUndo}>Undo</button>
-        <button onClick={handleExport}>Export</button>
+        <button onClick={() => navigate('/export')}>Export</button>
       </div>
 
       <canvas
@@ -213,24 +213,6 @@ function EditorPage() {
         onClick={handleClick}
         style={{ border: '1px solid #ccc', cursor: toolMode ? 'crosshair' : 'pointer' }}
       />
-
-      {selectedItem?.type?.startsWith('camera') && toolMode === null && (
-        <button
-          style={{
-            position: 'absolute',
-            top: selectedItem.y - 40,
-            left: selectedItem.x + 20,
-            zIndex: 10,
-            background: '#fff',
-            border: '1px solid #ccc',
-            borderRadius: '6px',
-            padding: '4px',
-          }}
-          onClick={() => setFovInverted(!fovInverted)}
-        >
-          Swap FOV Color
-        </button>
-      )}
 
       {selectedItem && (
         <div
@@ -248,6 +230,15 @@ function EditorPage() {
           }}
         >
           <button onClick={handleDelete}>❌</button>
+
+          {selectedItem.type.startsWith('camera') && (
+            <img
+              src={swapIcon}
+              alt="Swap"
+              onClick={handleSwapFOV}
+              style={{ width: 20, height: 20, cursor: 'pointer' }}
+            />
+          )}
         </div>
       )}
 

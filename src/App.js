@@ -5,6 +5,7 @@ import TemplatePage from './pages/TemplatePage';
 import ScalePage from './pages/ScalePage';
 import EditorPage from './pages/EditorPage';
 import ExportPage from './pages/ExportPage';
+import './index.css';
 
 function App() {
   return (
